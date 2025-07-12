@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GPS Tracker with Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      text-align: center;
+    }
+    #map {
+      height: 50vh;
+      width: 100%;
+    }
+    .stats {
+      padding: 20px;
+    }
+    .stats p {
+      font-size: 1.2rem;
+      margin: 10px 0;
+    }
+    h1 {
+      padding: 20px 0 10px;
+    }
+    .mode-btn {
+      background: #0f0;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-bottom: 15px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚶 GPS Tracker + Map</h1>
+
+  <button id="modeToggle" class="mode-btn">Mode: Walking</button>
+
+  <div id="map"></div>
+  <div class="stats">
+    <p id="speed">Speed: 0 m/s</p>
+    <p id="distance">Distance: 0 m</p>
+    <p id="average">Average: 0 m/s</p>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let previous = null;
+    let totalDistance = 0;
+    let startTime = Date.now();
+    let map, marker, path;
+    let mode = 'walking'; // or 'running'
+
+    const filters = {
+      walking: { min: 3, max: 50 },
+      running: { min: 2, max: 100 }
+    };
+
+    document.getElementById("modeToggle").onclick = () => {
+      mode = (mode === 'walking') ? 'running' : 'walking';
+      document.getElementById("modeToggle").textContent = `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+    };
+
+    function deg2rad(deg) {
+      return deg * Math.PI / 180;
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(deg2rad(lat1)) *
+        Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function initMap(lat, lon) {
+      map = L.map('map').setView([lat, lon], 17);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+      marker = L.marker([lat, lon]).addTo(map);
+      path = L.polyline([[lat, lon]], { color: 'lime' }).addTo(map);
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          const coords = pos.coords;
+          const speed = coords.speed !== null ? coords.speed : 0;
+          const lat = coords.latitude;
+          const lon = coords.longitude;
+
+          document.getElementById("speed").textContent = `Speed: ${speed.toFixed(1)} m/s`;
+
+          if (!map) {
+            initMap(lat, lon);
+          } else {
+            marker.setLatLng([lat, lon]);
+            map.panTo([lat, lon]);
+            path.addLatLng([lat, lon]);
+          }
+
+          if (previous) {
+            const d = getDistance(previous.latitude, previous.longitude, lat, lon);
+            const { min, max } = filters[mode];
+
+            if (d > min && d < max) {
+              totalDistance += d;
+              document.getElementById("distance").textContent = `Distance: ${Math.round(totalDistance)} m`;
+
+              const timeElapsed = (Date.now() - startTime) / 1000;
+              const avgSpeed = totalDistance / timeElapsed;
+              document.getElementById("average").textContent = `Average: ${avgSpeed.toFixed(1)} m/s`;
+            }
+          }
+
+          previous = coords;
+        },
+        (err) => {
+          alert("Location error: " + err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000
+        }
+      );
+    } else {
+      alert("Geolocation not supported.");
+    }
+  </script>
+</body>
+</html>
